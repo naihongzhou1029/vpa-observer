@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VPA-View · 台美股量價看盤</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <button id="btn-toggle-sidebar" class="icon-btn" title="收合/展開觀察清單">☰</button>
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span class="brand-title">VPA-View</span>
+      </div>
+      <form id="symbol-form" class="symbol-search">
+        <input
+          id="symbol-input"
+          type="text"
+          placeholder="輸入代號如 2330 或 NVDA"
+          autocomplete="off"
+        />
+        <button type="submit" class="btn btn-primary">查詢</button>
+        <button type="button" id="btn-add-watchlist" class="btn btn-ghost" title="加入觀察清單">+ 自選</button>
+      </form>
+    </div>
+
+    <div class="topbar-center">
+      <div class="tf-group" id="tf-group">
+        <button class="tf-btn" data-tf="5m">5m</button>
+        <button class="tf-btn" data-tf="15m">15m</button>
+        <button class="tf-btn" data-tf="60m">60m</button>
+        <button class="tf-btn active" data-tf="1d">日K</button>
+        <button class="tf-btn" data-tf="1w">週K</button>
+        <button class="tf-btn" data-tf="1mo">月K</button>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <label class="toggle-chip" title="顯示或隱藏 VPA 訊號標記">
+        <input type="checkbox" id="chk-vpa-markers" checked />
+        <span>VPA 標記</span>
+      </label>
+      <label class="toggle-chip" title="顯示或隱藏右側可視範圍分價量表">
+        <input type="checkbox" id="chk-vap" checked />
+        <span>VAP</span>
+      </label>
+      <select id="vap-bins" class="select-compact" title="分價量表價位分桶數">
+        <option value="24">24 格</option>
+        <option value="40" selected>40 格</option>
+        <option value="60">60 格</option>
+      </select>
+      <button id="btn-color-scheme" class="btn btn-ghost" title="切換台股紅漲綠跌 / 國際綠漲紅跌">
+        台股紅漲
+      </button>
+      <button id="btn-sync" class="btn btn-accent">立即同步</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <span>觀察清單</span>
+        <span id="db-badge" class="badge-muted">--</span>
+      </div>
+      <div id="watchlist-container" class="watchlist-scroll"></div>
+      <div class="sidebar-footer">
+        <div class="vpa-legend-box">
+          <div class="legend-title">VPA 量能等級色標</div>
+          <div class="legend-grid">
+            <span><i class="swatch ultra"></i>超大量 (≥2.0x)</span>
+            <span><i class="swatch high"></i>高量 (1.3~2.0x)</span>
+            <span><i class="swatch normal"></i>均量 (0.7~1.3x)</span>
+            <span><i class="swatch low"></i>縮量 (&lt;0.7x)</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="chart-stage">
+      <div id="chart-container" class="chart-container">
+        <canvas id="vap-canvas" class="vap-canvas"></canvas>
+        <div id="floating-legend" class="floating-legend">
+          <div class="legend-head">
+            <span id="lg-symbol" class="lg-symbol">--</span>
+            <span id="lg-name" class="lg-name"></span>
+            <span id="lg-tf" class="lg-tf">日K</span>
+            <span id="lg-time" class="lg-time"></span>
+          </div>
+          <div class="legend-ohlc" id="lg-ohlc">
+            載入中...
+          </div>
+          <div class="legend-vpa" id="lg-vpa"></div>
+        </div>
+        <div id="vap-readout" class="vap-readout"></div>
+        <div id="loading-overlay" class="loading-overlay hidden">
+          <div class="spinner"></div>
+          <span id="loading-text">正在抓取行情資料...</span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
