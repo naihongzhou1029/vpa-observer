@@ -18,6 +18,7 @@ VPA-View DevOps 控制中心
   ./devops.sh start [--daemon]    啟動後端服務 (預設前景；加上 --daemon 背景常駐)
   ./devops.sh stop                停止背景服務
   ./devops.sh restart             重啟背景服務
+  ./devops.sh redeploy            重新部署：重啟背景後端服務並以預設瀏覽器開啟前端頁面
   ./devops.sh status              查看服務運行狀態與資料庫摘要
   ./devops.sh logs                追蹤背景服務日誌
   ./devops.sh sync [SYMBOL]       同步全部觀察清單或指定標的的所有週期資料
@@ -132,6 +133,21 @@ cmd_restart() {
   cmd_start --daemon
 }
 
+open_browser() {
+  local url="http://${HOST}:${PORT}"
+  if command -v open >/dev/null 2>&1; then
+    open "${url}"
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "${url}" >/dev/null 2>&1 &
+  fi
+  echo "已於預設瀏覽器開啟 -> ${url}"
+}
+
+cmd_redeploy() {
+  cmd_restart
+  open_browser
+}
+
 cmd_status() {
   if is_running; then
     echo "狀態: 運行中 (PID: $(cat "${PID_FILE}"), URL: http://${HOST}:${PORT})"
@@ -186,8 +202,9 @@ main() {
     setup)   cmd_setup "$@" ;;
     start)   cmd_start "$@" ;;
     stop)    cmd_stop "$@" ;;
-    restart) cmd_restart "$@" ;;
-    status)  cmd_status "$@" ;;
+    restart)         cmd_restart "$@" ;;
+    redeploy|deploy) cmd_redeploy "$@" ;;
+    status)          cmd_status "$@" ;;
     logs)    cmd_logs "$@" ;;
     sync)    cmd_sync "$@" ;;
     *)       usage; exit 1 ;;
