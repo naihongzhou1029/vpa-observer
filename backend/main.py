@@ -159,6 +159,10 @@ def api_status() -> dict[str, Any]:
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
+    @app.get("/favicon.ico", include_in_schema=False)
+    def serve_favicon() -> FileResponse:
+        return FileResponse(str(FRONTEND_DIR / "icon.png"), media_type="image/png")
+
     @app.get("/")
     def serve_index() -> FileResponse:
         return FileResponse(str(FRONTEND_DIR / "index.html"))
