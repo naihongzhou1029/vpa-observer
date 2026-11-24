@@ -63,7 +63,12 @@
     <aside id="sidebar" class="sidebar">
       <div class="sidebar-header">
         <span>觀察清單</span>
-        <span id="db-badge" class="badge-muted">--</span>
+        <div id="tag-filter-bar" class="tag-filter-bar" title="多選顏色標籤篩選（未選取顯示全部）">
+          <button type="button" class="tag-pill tag-none" data-filter="none">無</button>
+          <button type="button" class="tag-pill tag-red" data-filter="red">紅</button>
+          <button type="button" class="tag-pill tag-yellow" data-filter="yellow">黃</button>
+          <button type="button" class="tag-pill tag-green" data-filter="green">綠</button>
+        </div>
       </div>
       <div id="watchlist-container" class="watchlist-scroll"></div>
       <div class="sidebar-footer">

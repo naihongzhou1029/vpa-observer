@@ -199,22 +199,76 @@ html, body {
 }
 
 .sidebar-header {
-  padding: 11px 13px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-weight: 600;
-  font-size: 18px;
+  font-size: 17px;
   color: var(--text-secondary);
 }
 
-.badge-muted {
-  font-size: 15px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--bg-elevated);
+.tag-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-pill {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--bg-main);
   color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  transition: all 0.14s ease;
+}
+
+.tag-pill:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.tag-pill.tag-none.active {
+  background: rgba(148, 163, 184, 0.24);
+  border-color: #94a3b8;
+  color: #f1f5f9;
+}
+
+.tag-pill.tag-red {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: rgba(248, 113, 113, 0.72);
+}
+.tag-pill.tag-red.active {
+  background: rgba(239, 68, 68, 0.85);
+  border-color: #ef4444;
+  color: #fff;
+}
+
+.tag-pill.tag-yellow {
+  border-color: rgba(245, 158, 11, 0.35);
+  color: rgba(251, 191, 36, 0.78);
+}
+.tag-pill.tag-yellow.active {
+  background: rgba(245, 158, 11, 0.88);
+  border-color: #f59e0b;
+  color: #111827;
+}
+
+.tag-pill.tag-green {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: rgba(74, 222, 128, 0.78);
+}
+.tag-pill.tag-green.active {
+  background: rgba(34, 197, 94, 0.85);
+  border-color: #22c55e;
+  color: #052e16;
 }
 
 .watchlist-scroll {
@@ -230,15 +284,41 @@ html, body {
   letter-spacing: 0.6px;
 }
 
+.wl-empty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-muted);
+}
+
 .wl-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
   padding: 9px 10px;
   border-radius: 7px;
   cursor: pointer;
   margin-bottom: 3px;
   border: 1px solid transparent;
+}
+
+.wl-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.wl-tags-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.wl-tag-btn {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 13px;
 }
 
 .wl-item:hover {
@@ -254,6 +334,7 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
   min-width: 0;
 }
 
@@ -268,13 +349,14 @@ html, body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 170px;
+  max-width: 100%;
 }
 
 .wl-right {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .wl-price-col {

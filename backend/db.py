@@ -21,6 +21,22 @@ DEFAULT_WATCHLIST: list[tuple[str, str, str]] = [
     ("SPY", "US", "SPDR S&P 500"),
 ]
 
+VALID_TAGS: tuple[str, ...] = ("red", "yellow", "green")
+
+
+def _parse_tags(raw: str | None) -> list[str]:
+    """Parse stored comma-separated tag string into ordered valid tag list."""
+    if not raw:
+        return []
+    seen = {part.strip().lower() for part in raw.split(",") if part.strip()}
+    return [t for t in VALID_TAGS if t in seen]
+
+
+def _serialize_tags(tags: list[str]) -> str:
+    """Normalize and serialize tag list into canonical comma-separated string."""
+    seen = {str(t).strip().lower() for t in tags if str(t).strip()}
+    return ",".join(t for t in VALID_TAGS if t in seen)
+
 
 def utc_now_iso() -> str:
     """Return current UTC timestamp in ISO-8601 format."""
@@ -55,10 +71,19 @@ def init_db() -> None:
                 market TEXT NOT NULL,
                 name TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
-                last_synced_at TEXT
+                last_synced_at TEXT,
+                tags TEXT NOT NULL DEFAULT ''
             );
             """
         )
+        cols = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(watchlist)").fetchall()
+        }
+        if "tags" not in cols:
+            conn.execute(
+                "ALTER TABLE watchlist ADD COLUMN tags TEXT NOT NULL DEFAULT '';"
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS ohlcv (
@@ -97,7 +122,7 @@ def get_watchlist() -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT symbol, market, name, created_at, last_synced_at
+            SELECT symbol, market, name, created_at, last_synced_at, tags
             FROM watchlist
             ORDER BY CASE WHEN market = 'TW' THEN 0 ELSE 1 END, symbol ASC
             """
@@ -105,6 +130,7 @@ def get_watchlist() -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         for row in rows:
             item = dict(row)
+            item["tags"] = _parse_tags(item.get("tags"))
             latest_bars = conn.execute(
                 """
                 SELECT close, ts FROM ohlcv
@@ -137,10 +163,14 @@ def get_watchlist_item(symbol: str) -> dict[str, Any] | None:
     """Return a single watchlist entry if present."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT symbol, market, name, created_at, last_synced_at FROM watchlist WHERE symbol = ?",
+            "SELECT symbol, market, name, created_at, last_synced_at, tags FROM watchlist WHERE symbol = ?",
             (symbol,),
         ).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        item = dict(row)
+        item["tags"] = _parse_tags(item.get("tags"))
+        return item
 
 
 def upsert_watchlist_item(symbol: str, market: str, name: str = "") -> dict[str, Any]:
@@ -149,8 +179,8 @@ def upsert_watchlist_item(symbol: str, market: str, name: str = "") -> dict[str,
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO watchlist (symbol, market, name, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO watchlist (symbol, market, name, created_at, tags)
+            VALUES (?, ?, ?, ?, '')
             ON CONFLICT(symbol) DO UPDATE SET
                 market = excluded.market,
                 name = CASE WHEN excluded.name != '' THEN excluded.name ELSE watchlist.name END
@@ -163,7 +193,21 @@ def upsert_watchlist_item(symbol: str, market: str, name: str = "") -> dict[str,
         "name": name,
         "created_at": now,
         "last_synced_at": None,
+        "tags": [],
     }
+
+
+def update_watchlist_tags(symbol: str, tags: list[str]) -> dict[str, Any] | None:
+    """Update color tags for a watchlist item and return the updated entry."""
+    serialized = _serialize_tags(tags)
+    with get_conn() as conn:
+        cur = conn.execute(
+            "UPDATE watchlist SET tags = ? WHERE symbol = ?",
+            (serialized, symbol),
+        )
+        if cur.rowcount == 0:
+            return None
+    return get_watchlist_item(symbol)
 
 
 def delete_watchlist_item(symbol: str) -> bool:
@@ -171,6 +215,17 @@ def delete_watchlist_item(symbol: str) -> bool:
     with get_conn() as conn:
         cur = conn.execute("DELETE FROM watchlist WHERE symbol = ?", (symbol,))
         return cur.rowcount > 0
+
+
+def update_watchlist_name(symbol: str, name: str) -> None:
+    """Update display name for a watchlist symbol."""
+    if not name:
+        return
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE watchlist SET name = ? WHERE symbol = ?",
+            (name, symbol),
+        )
 
 
 def update_watchlist_sync_time(symbol: str, name: str | None = None) -> None:
@@ -182,7 +237,7 @@ def update_watchlist_sync_time(symbol: str, name: str | None = None) -> None:
                 """
                 UPDATE watchlist
                 SET last_synced_at = ?,
-                    name = CASE WHEN name = '' OR name = symbol THEN ? ELSE name END
+                    name = ?
                 WHERE symbol = ?
                 """,
                 (now, name, symbol),

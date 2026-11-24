@@ -41,6 +41,10 @@ class WatchlistAddRequest(BaseModel):
     name: str = ""
 
 
+class WatchlistTagsRequest(BaseModel):
+    tags: list[str] = []
+
+
 class SyncRequest(BaseModel):
     symbol: str | None = None
     full: bool = False
@@ -75,6 +79,15 @@ def api_delete_watchlist(symbol: str) -> dict[str, Any]:
     return {"deleted": symbol.upper()}
 
 
+@app.put("/api/watchlist/{symbol}/tags")
+def api_update_watchlist_tags(symbol: str, req: WatchlistTagsRequest) -> dict[str, Any]:
+    """Update color tags for a symbol in the watchlist."""
+    updated = db.update_watchlist_tags(symbol.upper(), req.tags)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found in watchlist")
+    return {"item": updated}
+
+
 @app.get("/api/bars")
 def api_get_bars(
     symbol: str = Query(..., description="Ticker symbol, e.g. 2330, 2330.TW, NVDA"),
@@ -97,10 +110,22 @@ def api_get_bars(
     analysis = vpa.analyze_vpa(bars)
     watchlist_item = db.get_watchlist_item(canonical)
 
+    display_name = watchlist_item["name"] if watchlist_item else ""
+    needs_bilingual = (
+        market == "TW"
+        and not (fetcher.has_cjk(display_name) and fetcher.has_latin(display_name))
+    )
+    if not display_name or display_name == canonical or needs_bilingual:
+        resolved = fetcher.resolve_display_name(canonical)
+        if resolved and resolved != display_name:
+            display_name = resolved
+            if watchlist_item:
+                db.update_watchlist_name(canonical, display_name)
+
     return {
         "symbol": canonical,
         "market": market,
-        "name": watchlist_item["name"] if watchlist_item else canonical,
+        "name": display_name or canonical,
         "interval": interval,
         "bars": analysis["bars"],
         "vpa_markers": analysis["markers"],

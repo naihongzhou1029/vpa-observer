@@ -28,6 +28,7 @@
     barMap: new Map(),
     markers: [],
     watchlist: [],
+    activeTagFilters: new Set(),
   };
 
   // DOM references
@@ -36,7 +37,7 @@
   const vapCtx = vapCanvas.getContext("2d");
   const sidebar = document.getElementById("sidebar");
   const watchlistEl = document.getElementById("watchlist-container");
-  const dbBadge = document.getElementById("db-badge");
+  const tagFilterBar = document.getElementById("tag-filter-bar");
   const symbolForm = document.getElementById("symbol-form");
   const symbolInput = document.getElementById("symbol-input");
   const btnAddWatchlist = document.getElementById("btn-add-watchlist");
@@ -516,10 +517,20 @@
     return resp.json();
   }
 
+  function matchesTagFilters(item) {
+    if (state.activeTagFilters.size === 0) return true;
+    const tags = Array.isArray(item.tags) ? item.tags : [];
+    if (state.activeTagFilters.has("none") && tags.length === 0) {
+      return true;
+    }
+    return tags.some((t) => state.activeTagFilters.has(t));
+  }
+
   function renderWatchlist() {
     const palette = getPalette();
-    const twItems = state.watchlist.filter((i) => i.market === "TW");
-    const usItems = state.watchlist.filter((i) => i.market !== "TW");
+    const filtered = state.watchlist.filter(matchesTagFilters);
+    const twItems = filtered.filter((i) => i.market === "TW");
+    const usItems = filtered.filter((i) => i.market !== "TW");
 
     const buildGroup = (title, items) => {
       if (!items.length) return "";
@@ -534,19 +545,36 @@
             chgStr = `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%`;
             chgColor = chg >= 0 ? palette.up : palette.down;
           }
+          const tags = Array.isArray(item.tags) ? item.tags : [];
+          const isNone = tags.length === 0;
+          const tagBtns = [
+            { key: "none", label: "無", cls: "tag-none", active: isNone },
+            { key: "red", label: "紅", cls: "tag-red", active: tags.includes("red") },
+            { key: "yellow", label: "黃", cls: "tag-yellow", active: tags.includes("yellow") },
+            { key: "green", label: "綠", cls: "tag-green", active: tags.includes("green") },
+          ]
+            .map(
+              (t) =>
+                `<button type="button" class="tag-pill wl-tag-btn ${t.cls} ${t.active ? "active" : ""}" data-tag-sym="${item.symbol}" data-tag-val="${t.key}">${t.label}</button>`
+            )
+            .join("");
+
           return `
             <div class="wl-item ${isActive}" data-symbol="${item.symbol}">
-              <div class="wl-left">
-                <span class="wl-symbol">${item.symbol}</span>
-                <span class="wl-name">${item.name || item.symbol}</span>
-              </div>
-              <div class="wl-right">
-                <div class="wl-price-col">
-                  <div class="wl-price">${priceStr}</div>
-                  <div class="wl-chg" style="color:${chgColor}">${chgStr}</div>
+              <div class="wl-row-top">
+                <div class="wl-left">
+                  <span class="wl-symbol">${item.symbol}</span>
+                  <span class="wl-name">${item.name || item.symbol}</span>
                 </div>
-                <button class="wl-del" data-del="${item.symbol}" title="從觀察清單移除">×</button>
+                <div class="wl-right">
+                  <div class="wl-price-col">
+                    <div class="wl-price">${priceStr}</div>
+                    <div class="wl-chg" style="color:${chgColor}">${chgStr}</div>
+                  </div>
+                  <button class="wl-del" data-del="${item.symbol}" title="從觀察清單移除">×</button>
+                </div>
               </div>
+              <div class="wl-tags-row">${tagBtns}</div>
             </div>
           `;
         })
@@ -554,12 +582,45 @@
       return `<div class="wl-group-title">${title}</div>${rows}`;
     };
 
-    watchlistEl.innerHTML = buildGroup("台股 TW", twItems) + buildGroup("美股 US", usItems);
+    const html = buildGroup("台股 TW", twItems) + buildGroup("美股 US", usItems);
+    watchlistEl.innerHTML = html || `<div class="wl-empty">沒有符合篩選標籤的標的</div>`;
 
     watchlistEl.querySelectorAll(".wl-item").forEach((el) => {
       el.addEventListener("click", (e) => {
-        if (e.target.dataset.del) return;
+        if (e.target.dataset.del || e.target.dataset.tagVal) return;
         loadChart(el.dataset.symbol, state.interval);
+      });
+    });
+
+    watchlistEl.querySelectorAll(".wl-tag-btn").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const sym = btn.dataset.tagSym;
+        const tagVal = btn.dataset.tagVal;
+        const item = state.watchlist.find((i) => i.symbol === sym);
+        if (!item) return;
+
+        let nextTags;
+        if (tagVal === "none") {
+          nextTags = [];
+        } else {
+          const cur = new Set(Array.isArray(item.tags) ? item.tags : []);
+          if (cur.has(tagVal)) cur.delete(tagVal);
+          else cur.add(tagVal);
+          nextTags = Array.from(cur);
+        }
+
+        try {
+          const res = await fetchJson(`/api/watchlist/${encodeURIComponent(sym)}/tags`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tags: nextTags }),
+          });
+          item.tags = res.item.tags;
+          renderWatchlist();
+        } catch (err) {
+          showToast(`更新標籤失敗: ${err.message}`);
+        }
       });
     });
 
@@ -582,13 +643,6 @@
     const data = await fetchJson("/api/watchlist");
     state.watchlist = data.items || [];
     renderWatchlist();
-  }
-
-  async function loadStatus() {
-    try {
-      const st = await fetchJson("/api/status");
-      dbBadge.textContent = `${st.db.total_bars.toLocaleString()} K`;
-    } catch (_) {}
   }
 
   async function loadChart(symbol, interval) {
@@ -622,7 +676,6 @@
       }
       scheduleVapRedraw();
       renderWatchlist();
-      loadStatus();
     } catch (err) {
       showToast(`載入失敗: ${err.message}`);
     } finally {
@@ -631,6 +684,20 @@
   }
 
   // ---------------- Event Handlers ----------------
+  tagFilterBar.querySelectorAll(".tag-pill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const filterKey = btn.dataset.filter;
+      if (state.activeTagFilters.has(filterKey)) {
+        state.activeTagFilters.delete(filterKey);
+        btn.classList.remove("active");
+      } else {
+        state.activeTagFilters.add(filterKey);
+        btn.classList.add("active");
+      }
+      renderWatchlist();
+    });
+  });
+
   symbolForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const val = symbolInput.value.trim();

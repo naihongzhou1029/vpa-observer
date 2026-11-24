@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import pandas as pd
@@ -27,6 +29,22 @@ PERIOD_CONFIG = {
 }
 
 TW_CODE_RE = re.compile(r"^\d{4,6}[A-Z]?$")
+CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+LATIN_RE = re.compile(r"[A-Za-z]")
+
+_TW_NAME_CACHE: dict[str, str] = {}
+_TW_NAME_CACHE_TS: float = 0.0
+_TW_NAME_CACHE_TTL = 12 * 3600
+
+
+def has_cjk(text: str) -> bool:
+    """Return True if text contains at least one CJK character."""
+    return bool(CJK_RE.search(text or ""))
+
+
+def has_latin(text: str) -> bool:
+    """Return True if text contains at least one ASCII Latin letter."""
+    return bool(LATIN_RE.search(text or ""))
 
 
 def infer_market(symbol: str) -> str:
@@ -169,14 +187,123 @@ def _fetch_finmind_daily(symbol: str, days: int = 1825) -> list[dict[str, Any]]:
         return []
 
 
-def _resolve_display_name(ticker: yf.Ticker, symbol: str) -> str:
-    """Best-effort lookup of human-readable company/ETF name."""
+def _patch_twii_daily_volume(bars: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fill missing zero-volume ^TWII daily bars using TWSE after-trading FMTQIK data.
+
+    TWSE transaction counts (row[3]) match Yahoo Finance's historical ^TWII volume scale,
+    keeping rolling 20-period volume averages consistent across bars.
+    """
+    if not bars or not any(b["volume"] <= 0 for b in bars):
+        return bars
+
     try:
-        info = ticker.info or {}
-        name = info.get("shortName") or info.get("longName") or ""
-        return str(name).strip()[:64]
+        resp = httpx.get(
+            "https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK",
+            params={"response": "json"},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        rows = payload.get("data") or []
+    except Exception as exc:
+        logger.warning("TWSE FMTQIK volume fallback failed: %s", exc)
+        return bars
+
+    twse_counts: dict[str, float] = {}
+    for row in rows:
+        if len(row) < 4:
+            continue
+        parts = str(row[0]).strip().split("/")
+        if len(parts) != 3:
+            continue
+        try:
+            ad_year = int(parts[0]) + 1911
+            date_key = f"{ad_year:04d}-{int(parts[1]):02d}-{int(parts[2]):02d}"
+            tx_count = float(str(row[3]).replace(",", "").strip())
+            if tx_count > 0:
+                twse_counts[date_key] = tx_count
+        except ValueError:
+            continue
+
+    if not twse_counts:
+        return bars
+
+    tz_tw = ZoneInfo("Asia/Taipei")
+    for bar in bars:
+        if bar["volume"] <= 0:
+            date_key = datetime.fromtimestamp(bar["ts"], tz=tz_tw).strftime("%Y-%m-%d")
+            if date_key in twse_counts:
+                bar["volume"] = twse_counts[date_key]
+    return bars
+
+
+def _load_tw_official_names() -> dict[str, str]:
+    """Fetch and cache official Taiwan stock/ETF Chinese names from TWSE and TPEx OpenAPI."""
+    global _TW_NAME_CACHE, _TW_NAME_CACHE_TS
+    now = time.time()
+    if _TW_NAME_CACHE and (now - _TW_NAME_CACHE_TS) < _TW_NAME_CACHE_TTL:
+        return _TW_NAME_CACHE
+
+    mapping: dict[str, str] = {"^TWII": "加權指數"}
+    sources = (
+        ("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", "Code", "Name"),
+        ("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes", "SecuritiesCompanyCode", "CompanyName"),
+    )
+    for url, code_key, name_key in sources:
+        try:
+            resp = httpx.get(url, timeout=10.0)
+            resp.raise_for_status()
+            rows = resp.json()
+            if isinstance(rows, list):
+                for row in rows:
+                    code = str(row.get(code_key, "")).strip().upper()
+                    zh = str(row.get(name_key, "")).strip()
+                    if code and zh:
+                        mapping[code] = zh
+        except Exception as exc:
+            logger.warning("Failed to fetch TW official names from %s: %s", url, exc)
+
+    if len(mapping) > 1:
+        _TW_NAME_CACHE = mapping
+        _TW_NAME_CACHE_TS = now
+    elif not _TW_NAME_CACHE:
+        _TW_NAME_CACHE = mapping
+    return _TW_NAME_CACHE
+
+
+def _get_tw_official_zh_name(symbol: str) -> str:
+    """Lookup official Chinese short name for a TW symbol (e.g. '2330.TW', '3374.TWO', '^TWII')."""
+    upper = symbol.upper()
+    mapping = _load_tw_official_names()
+    if upper in mapping:
+        return mapping[upper]
+    code = upper.split(".")[0]
+    return mapping.get(code, "")
+
+
+def resolve_display_name(symbol: str, ticker: yf.Ticker | None = None) -> str:
+    """Resolve human-readable display name; TW stocks combine official Chinese + English names."""
+    t = ticker or yf.Ticker(symbol)
+    en_name = ""
+    try:
+        info = t.info or {}
+        raw = info.get("shortName") or info.get("longName") or ""
+        en_name = " ".join(str(raw).split())
     except Exception:
-        return symbol
+        en_name = ""
+
+    if infer_market(symbol) == "TW":
+        zh_name = _get_tw_official_zh_name(symbol)
+        if zh_name and en_name:
+            if zh_name in en_name:
+                return en_name[:80]
+            if en_name in zh_name:
+                return zh_name[:80]
+            return f"{zh_name} {en_name}"[:80]
+        if zh_name:
+            return zh_name[:80]
+
+    return (en_name or symbol)[:80]
 
 
 def fetch_and_store(
@@ -208,6 +335,9 @@ def fetch_and_store(
         if not bars and interval == "1d" and infer_market(symbol) == "TW":
             bars = _fetch_finmind_daily(symbol)
 
+        if bars and symbol == "^TWII" and interval == "1d":
+            bars = _patch_twii_daily_volume(bars)
+
         if bars:
             written[interval] = db.upsert_bars(symbol, interval, bars)
         else:
@@ -215,9 +345,11 @@ def fetch_and_store(
 
     existing_item = db.get_watchlist_item(symbol)
     if existing_item:
-        name = None
-        if not existing_item.get("name") or existing_item.get("name") == symbol:
-            name = _resolve_display_name(ticker, symbol)
+        cur_name = existing_item.get("name") or ""
+        needs_name = not cur_name or cur_name == symbol
+        if infer_market(symbol) == "TW" and not (has_cjk(cur_name) and has_latin(cur_name)):
+            needs_name = True
+        name = resolve_display_name(symbol, ticker) if needs_name else None
         db.update_watchlist_sync_time(symbol, name=name)
 
     return {
