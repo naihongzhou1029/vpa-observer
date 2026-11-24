@@ -106,6 +106,13 @@
     return "rgba(92, 107, 127, 0.45)";
   }
 
+  function markerColorForGrade(grade) {
+    if (grade === "ultra_high") return "#e040fb";
+    if (grade === "high") return "#f59e0b";
+    if (grade === "normal") return "#38bdf8";
+    return "#5c6b7f";
+  }
+
   // Initialize Lightweight Charts
   const chart = LightweightCharts.createChart(chartContainer, {
     layout: {
@@ -223,7 +230,7 @@
     const gradeText = GRADE_LABELS[bar.volume_grade] || bar.volume_grade;
     let vpaHtml = `<span class="vpa-badge ${bar.volume_grade}">量能: ${gradeText}</span>`;
     if (bar.signal_label) {
-      vpaHtml += `<span class="vpa-signal-pill">${bar.signal_label}</span>`;
+      vpaHtml += `<span class="vpa-signal-pill ${bar.volume_grade}">${bar.signal_label}</span>`;
       vpaHtml += `<span class="vpa-desc">${bar.signal_desc}</span>`;
     }
     lgVpa.innerHTML = vpaHtml;
@@ -258,20 +265,14 @@
 
     if (state.showMarkers) {
       const styledMarkers = state.markers.map((m) => {
-        let color = "#38bdf8";
-        if (m.signal === "climax_bull" || m.signal === "stopping_volume" || m.signal === "low_vol_test_supply") {
-          color = palette.up;
-        } else if (m.signal === "climax_bear" || m.signal === "buying_climax_rejection") {
-          color = palette.down;
-        } else if (m.signal === "effort_no_result") {
-          color = "#f59e0b";
-        }
+        const bar = state.barMap.get(m.time);
+        const grade = m.volume_grade || (bar ? bar.volume_grade : "normal");
         return {
           time: m.time,
           position: m.position,
-          color,
-          shape: m.shape,
-          text: m.text,
+          color: markerColorForGrade(grade),
+          shape: m.position === "belowBar" ? "arrowUp" : "arrowDown",
+          text: "",
           size: 1,
         };
       });

@@ -53,12 +53,13 @@ def _detect_signal(row: pd.Series) -> tuple[str, str, str, str, str]:
     # 2. Effort vs Result anomaly (high volume, narrow spread)
     if vol_ratio >= 1.6 and spread_ratio <= 0.65:
         pos = "aboveBar" if is_bull else "belowBar"
+        shape = "arrowDown" if pos == "aboveBar" else "arrowUp"
         return (
             "effort_no_result",
             "量大價滯",
             "成交量顯著放大但價格振幅狹窄（努力無結果），暗示主力在關鍵價位吸籌或出貨阻擋。",
             pos,
-            "circle",
+            shape,
         )
 
     # 3. Long wick anomalies under elevated volume
@@ -88,7 +89,7 @@ def _detect_signal(row: pd.Series) -> tuple[str, str, str, str, str]:
                 "縮量測底",
                 "成交量明顯萎縮且下影收紅，浮額清洗完畢（Test of Supply）。",
                 "belowBar",
-                "circle",
+                "arrowUp",
             )
         if is_bull and spread_ratio <= 0.60 and close_pos >= 0.60:
             return (
@@ -96,7 +97,7 @@ def _detect_signal(row: pd.Series) -> tuple[str, str, str, str, str]:
                 "無量上攻",
                 "價格上漲但量能低迷（No Demand），需警惕續航力不足。",
                 "aboveBar",
-                "circle",
+                "arrowDown",
             )
 
     return ("", "", "", "", "")
@@ -171,6 +172,7 @@ def analyze_vpa(bars: list[dict[str, Any]]) -> dict[str, Any]:
                     "position": m_pos,
                     "shape": m_shape,
                     "signal": sig_code,
+                    "volume_grade": grade,
                     "text": sig_label,
                 }
             )
