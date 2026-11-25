@@ -2,6 +2,8 @@
 
 台美股量價分析（VPA）與可視範圍分價量表（VAP）看盤系統，基於 Anna Coulling《A Complete Guide To Volume Price Analysis》的量價理論設計，結合 `FastAPI`、`SQLite` 本地快取與 `TradingView Lightweight Charts` 打造輕量即時看盤介面。
 
+![VPA-Observer 看盤介面預覽](frontend/preview.png)
+
 ## 核心功能
 
 - 多週期台美股與指數 K 線：支援 `5m`、`15m`、`60m`、`1d`、`1w`、`1mo`（週 K 與月 K 由日 K 依市場時區即時聚合），並支援台股紅漲綠跌與國際綠漲紅跌配色切換。
@@ -62,5 +64,5 @@
 - `backend/vpa.py`：20MA 量能分級與單根 VPA 異常訊號引擎 `analyze_vpa()`
 - `backend/db.py`：SQLite 資料表初始化與觀察清單／OHLCV 讀寫
 - `backend/scheduler.py`：台美股盤中與盤後自動同步排程
-- `frontend/`：看盤前端頁面（`index.html`、`app.js`、`style.css`、`icon.png`）
+- `frontend/`：看盤前端頁面（`index.html`、`app.js`、`style.css`、`icon.png`、`preview.png`）
 - `devops.sh`：環境建置、服務啟停、系統捷徑安裝與資料同步腳本
