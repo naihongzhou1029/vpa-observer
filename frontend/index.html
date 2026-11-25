@@ -6,7 +6,7 @@
   <title>VPA-View · 台美股量價看盤</title>
   <link rel="icon" type="image/png" href="/static/icon.png" />
   <link rel="apple-touch-icon" href="/static/icon.png" />
-  <link rel="stylesheet" href="/static/style.css?v=20261125b" />
+  <link rel="stylesheet" href="/static/style.css?v=20261125c" />
   <script src="https://unpkg.com/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -18,12 +18,20 @@
         <span class="brand-title">VPA-View</span>
       </div>
       <form id="symbol-form" class="symbol-search">
-        <input
-          id="symbol-input"
-          type="text"
-          placeholder="輸入代號如 2330 或 NVDA"
-          autocomplete="off"
-        />
+        <div class="symbol-input-wrap">
+          <input
+            id="symbol-input"
+            type="text"
+            placeholder="輸入代號如 2330 或 NVDA"
+            autocomplete="off"
+          />
+          <div class="symbol-tooltip" role="tooltip">
+            <div class="tt-title">代號輸入格式（Yahoo Finance）</div>
+            <div><span class="tt-key">台股個股/ETF</span> <code>2330</code>、<code>0050</code>（自動補 <code>.TW</code> / <code>.TWO</code>）</div>
+            <div><span class="tt-key">美股個股/ETF</span> <code>NVDA</code>、<code>SPY</code>、<code>SOXX</code></div>
+            <div><span class="tt-key">指數（須加 ^）</span> <code>^TWII</code> 加權、<code>^SOX</code> 費半、<code>^GSPC</code> S&amp;P 500、<code>^IXIC</code> 那指、<code>^DJI</code> 道瓊</div>
+          </div>
+        </div>
         <button type="submit" class="btn btn-primary">查詢</button>
         <button type="button" id="btn-add-watchlist" class="btn btn-ghost" title="加入觀察清單">+ 自選</button>
       </form>

@@ -87,6 +87,61 @@ html, body {
   border-color: var(--accent);
 }
 
+.symbol-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.symbol-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  width: 410px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.55;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+.symbol-input-wrap:hover .symbol-tooltip,
+.symbol-input-wrap:focus-within .symbol-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.symbol-tooltip .tt-title {
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.symbol-tooltip .tt-key {
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+
+.symbol-tooltip code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
 .btn, .icon-btn, .select-compact {
   height: 38px;
   padding: 0 11px;

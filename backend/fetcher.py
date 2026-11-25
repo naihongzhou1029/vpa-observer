@@ -31,6 +31,7 @@ PERIOD_CONFIG = {
 TW_CODE_RE = re.compile(r"^\d{4,6}[A-Z]?$")
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 LATIN_RE = re.compile(r"[A-Za-z]")
+INDEX_VOLUME_PROXY: dict[str, str] = {"^SOX": "SOXX"}
 
 _TW_NAME_CACHE: dict[str, str] = {}
 _TW_NAME_CACHE_TS: float = 0.0
@@ -73,7 +74,7 @@ def normalize_symbol(raw_symbol: str) -> tuple[str, str]:
     if not cleaned:
         raise ValueError("Symbol cannot be empty")
 
-    if cleaned in ("TWII", "^TWII"):
+    if cleaned == "^TWII":
         return "^TWII", "TW"
 
     if cleaned.endswith(".TW") or cleaned.endswith(".TWO"):
@@ -237,6 +238,54 @@ def _patch_twii_daily_volume(bars: list[dict[str, Any]]) -> list[dict[str, Any]]
     return bars
 
 
+def _patch_index_proxy_volume(
+    bars: list[dict[str, Any]],
+    proxy_symbol: str,
+    period: str,
+    interval: str,
+) -> list[dict[str, Any]]:
+    """Fill zero-volume index bars using a liquid proxy ETF's volume for the same timeframe."""
+    if not bars or not any(b["volume"] <= 0 for b in bars):
+        return bars
+
+    try:
+        proxy_df = yf.Ticker(proxy_symbol).history(
+            period=period, interval=interval, auto_adjust=False
+        )
+        proxy_bars = _df_to_bars(proxy_df)
+    except Exception as exc:
+        logger.warning(
+            "Proxy volume fetch failed (%s -> %s %s): %s",
+            proxy_symbol,
+            interval,
+            period,
+            exc,
+        )
+        return bars
+
+    if not proxy_bars:
+        return bars
+
+    ts_vol = {b["ts"]: b["volume"] for b in proxy_bars if b["volume"] > 0}
+    date_vol: dict[str, float] = {}
+    tz_ny = ZoneInfo("America/New_York")
+    if interval == "1d":
+        for b in proxy_bars:
+            if b["volume"] > 0:
+                date_key = datetime.fromtimestamp(b["ts"], tz=tz_ny).strftime("%Y-%m-%d")
+                date_vol[date_key] = b["volume"]
+
+    for bar in bars:
+        if bar["volume"] <= 0:
+            if bar["ts"] in ts_vol:
+                bar["volume"] = ts_vol[bar["ts"]]
+            elif date_vol:
+                date_key = datetime.fromtimestamp(bar["ts"], tz=tz_ny).strftime("%Y-%m-%d")
+                if date_key in date_vol:
+                    bar["volume"] = date_vol[date_key]
+    return bars
+
+
 def _load_tw_official_names() -> dict[str, str]:
     """Fetch and cache official Taiwan stock/ETF Chinese names from TWSE and TPEx OpenAPI."""
     global _TW_NAME_CACHE, _TW_NAME_CACHE_TS
@@ -322,6 +371,10 @@ def fetch_and_store(
             continue
         has_existing = db.has_bars(symbol, interval)
         mode = "full" if (full or not has_existing) else "inc"
+        if mode == "inc" and symbol in INDEX_VOLUME_PROXY:
+            recent_bars = db.get_bars(symbol, interval, limit=50)
+            if recent_bars and all(b["volume"] <= 0 for b in recent_bars):
+                mode = "full"
         period = PERIOD_CONFIG[interval][mode]
         bars: list[dict[str, Any]] = []
 
@@ -337,6 +390,11 @@ def fetch_and_store(
 
         if bars and symbol == "^TWII" and interval == "1d":
             bars = _patch_twii_daily_volume(bars)
+
+        if bars and symbol in INDEX_VOLUME_PROXY:
+            bars = _patch_index_proxy_volume(
+                bars, INDEX_VOLUME_PROXY[symbol], period, interval
+            )
 
         if bars:
             written[interval] = db.upsert_bars(symbol, interval, bars)
@@ -410,14 +468,24 @@ def get_bars_for_chart(symbol: str, interval: str, limit: int = 1500) -> list[di
     market = infer_market(symbol)
     if interval in ("1w", "1mo"):
         daily_bars = db.get_bars(symbol, "1d", limit=3000)
-        if not daily_bars:
+        needs_proxy_upgrade = (
+            symbol in INDEX_VOLUME_PROXY
+            and daily_bars
+            and all(b["volume"] <= 0 for b in daily_bars)
+        )
+        if not daily_bars or needs_proxy_upgrade:
             fetch_and_store(symbol, intervals=["1d"], full=True)
             daily_bars = db.get_bars(symbol, "1d", limit=3000)
         resampled = _resample_daily_bars(daily_bars, interval, market)
         return resampled[-limit:]
 
     bars = db.get_bars(symbol, interval, limit=limit)
-    if not bars:
+    needs_proxy_upgrade = (
+        symbol in INDEX_VOLUME_PROXY
+        and bars
+        and all(b["volume"] <= 0 for b in bars)
+    )
+    if not bars or needs_proxy_upgrade:
         fetch_and_store(symbol, intervals=[interval], full=True)
         bars = db.get_bars(symbol, interval, limit=limit)
     return bars
