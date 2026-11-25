@@ -18,7 +18,7 @@ VPA-View DevOps 控制中心
   ./devops.sh start [--daemon]    啟動後端服務 (預設前景；加上 --daemon 背景常駐)
   ./devops.sh stop                停止背景服務
   ./devops.sh restart             重啟背景服務
-  ./devops.sh redeploy            重新部署：重啟背景後端服務並以預設瀏覽器開啟前端頁面
+  ./devops.sh redeploy            重新部署：重啟背景後端服務、更新系統應用程式捷徑並以預設瀏覽器開啟前端頁面
   ./devops.sh status              查看服務運行狀態與資料庫摘要
   ./devops.sh logs                追蹤背景服務日誌
   ./devops.sh sync [SYMBOL]       同步全部觀察清單或指定標的的所有週期資料
@@ -143,7 +143,103 @@ open_browser() {
   echo "已於預設瀏覽器開啟 -> ${url}"
 }
 
+install_app_shortcut() {
+  local os_name
+  os_name="$(uname -s)"
+  if [[ "${os_name}" == "Darwin" ]]; then
+    local apps_dir="/Applications"
+    if [[ ! -w "${apps_dir}" ]]; then
+      apps_dir="${HOME}/Applications"
+      mkdir -p "${apps_dir}"
+    fi
+    local app_dir="${apps_dir}/VPA-View.app"
+    local macos_dir="${app_dir}/Contents/MacOS"
+    local res_dir="${app_dir}/Contents/Resources"
+    mkdir -p "${macos_dir}" "${res_dir}"
+
+    cat > "${macos_dir}/VPA-View" <<EOF
+#!/usr/bin/env bash
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\${PATH:-}"
+exec "${ROOT_DIR}/devops.sh" redeploy --no-shortcut >> "${RUN_DIR}/vpa-view.log" 2>&1
+EOF
+    chmod +x "${macos_dir}/VPA-View"
+
+    cat > "${app_dir}/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>VPA-View</string>
+  <key>CFBundleDisplayName</key>
+  <string>VPA-View</string>
+  <key>CFBundleIdentifier</key>
+  <string>local.vpa-view.launcher</string>
+  <key>CFBundleVersion</key>
+  <string>1.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleExecutable</key>
+  <string>VPA-View</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>LSUIElement</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+
+    local icon_src="${ROOT_DIR}/frontend/icon.png"
+    if [[ -f "${icon_src}" ]] && command -v sips >/dev/null 2>&1 && command -v iconutil >/dev/null 2>&1; then
+      local tmp_dir iconset_dir
+      tmp_dir="$(mktemp -d)"
+      iconset_dir="${tmp_dir}/AppIcon.iconset"
+      mkdir -p "${iconset_dir}"
+      sips -z 16 16     "${icon_src}" --out "${iconset_dir}/icon_16x16.png"      >/dev/null
+      sips -z 32 32     "${icon_src}" --out "${iconset_dir}/icon_16x16@2x.png"   >/dev/null
+      sips -z 32 32     "${icon_src}" --out "${iconset_dir}/icon_32x32.png"      >/dev/null
+      sips -z 64 64     "${icon_src}" --out "${iconset_dir}/icon_32x32@2x.png"   >/dev/null
+      sips -z 128 128   "${icon_src}" --out "${iconset_dir}/icon_128x128.png"    >/dev/null
+      sips -z 256 256   "${icon_src}" --out "${iconset_dir}/icon_128x128@2x.png" >/dev/null
+      sips -z 256 256   "${icon_src}" --out "${iconset_dir}/icon_256x256.png"    >/dev/null
+      sips -z 512 512   "${icon_src}" --out "${iconset_dir}/icon_256x256@2x.png" >/dev/null
+      sips -z 512 512   "${icon_src}" --out "${iconset_dir}/icon_512x512.png"    >/dev/null
+      sips -z 1024 1024 "${icon_src}" --out "${iconset_dir}/icon_512x512@2x.png" >/dev/null
+      iconutil -c icns "${iconset_dir}" -o "${res_dir}/AppIcon.icns"
+      rm -rf "${tmp_dir}"
+    fi
+
+    touch "${app_dir}"
+    local lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+    if [[ -x "${lsregister}" ]]; then
+      "${lsregister}" -f "${app_dir}" >/dev/null 2>&1 || true
+    fi
+    echo "已更新系統應用程式捷徑 -> ${app_dir}"
+  elif [[ "${os_name}" == "Linux" ]]; then
+    local desktop_dir="${HOME}/.local/share/applications"
+    local desktop_file="${desktop_dir}/vpa-view.desktop"
+    mkdir -p "${desktop_dir}"
+    cat > "${desktop_file}" <<EOF
+[Desktop Entry]
+Type=Application
+Name=VPA-View
+Comment=台美股量價看盤
+Exec="${ROOT_DIR}/devops.sh" redeploy --no-shortcut
+Icon=${ROOT_DIR}/frontend/icon.png
+Terminal=false
+Categories=Finance;Utility;
+EOF
+    chmod +x "${desktop_file}"
+    echo "已更新系統應用程式捷徑 -> ${desktop_file}"
+  fi
+}
+
 cmd_redeploy() {
+  if [[ "${1:-}" != "--no-shortcut" ]]; then
+    install_app_shortcut
+  fi
   cmd_restart
   open_browser
 }
