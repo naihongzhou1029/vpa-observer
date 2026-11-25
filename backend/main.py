@@ -1,4 +1,4 @@
-"""FastAPI application entrypoint for VPA-View."""
+"""FastAPI application entrypoint for VPA-Observer."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ async def lifespan(_app: FastAPI):
         scheduler.stop_scheduler()
 
 
-app = FastAPI(title="VPA-View", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="VPA-Observer", version="0.1.0", lifespan=lifespan)
 
 
 class WatchlistAddRequest(BaseModel):

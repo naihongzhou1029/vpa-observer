@@ -10,7 +10,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from backend import db, fetcher
 
-logger = logging.getLogger("vpa_view.scheduler")
+logger = logging.getLogger("vpa_observer.scheduler")
 
 _scheduler: BackgroundScheduler | None = None
 

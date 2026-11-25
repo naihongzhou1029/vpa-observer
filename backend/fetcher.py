@@ -16,7 +16,7 @@ import yfinance as yf
 
 from backend import db
 
-logger = logging.getLogger("vpa_view.fetcher")
+logger = logging.getLogger("vpa_observer.fetcher")
 
 RAW_INTERVALS = ("1d", "60m", "15m", "5m")
 SUPPORTED_INTERVALS = ("5m", "15m", "60m", "1d", "1w", "1mo")

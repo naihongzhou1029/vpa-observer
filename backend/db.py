@@ -1,4 +1,4 @@
-"""SQLite persistence layer for VPA-View."""
+"""SQLite persistence layer for VPA-Observer."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any, Iterator
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "vpa_view.db"
+DB_PATH = DATA_DIR / "vpa_observer.db"
 
 DEFAULT_WATCHLIST: list[tuple[str, str, str]] = [
     ("2330.TW", "TW", "台積電"),

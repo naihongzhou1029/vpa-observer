@@ -4,14 +4,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${ROOT_DIR}/.venv"
 RUN_DIR="${ROOT_DIR}/.run"
-PID_FILE="${RUN_DIR}/vpa-view.pid"
-LOG_FILE="${RUN_DIR}/vpa-view.log"
+PID_FILE="${RUN_DIR}/vpa-observer.pid"
+LOG_FILE="${RUN_DIR}/vpa-observer.log"
 HOST="${VPA_HOST:-127.0.0.1}"
 PORT="${VPA_PORT:-8050}"
 
 usage() {
   cat <<EOF
-VPA-View DevOps 控制中心
+VPA-Observer DevOps 控制中心
 
 用法:
   ./devops.sh setup               建立 Python 虛擬環境、安裝依賴套件並初始化 SQLite
@@ -81,7 +81,7 @@ cmd_start() {
   fi
 
   if is_running; then
-    echo "VPA-View 已在運行中 (PID: $(cat "${PID_FILE}"), URL: http://${HOST}:${PORT})"
+    echo "VPA-Observer 已在運行中 (PID: $(cat "${PID_FILE}"), URL: http://${HOST}:${PORT})"
     return 0
   fi
 
@@ -92,14 +92,14 @@ cmd_start() {
     echo "${pid}" > "${PID_FILE}"
     sleep 2
     if kill -0 "${pid}" 2>/dev/null; then
-      echo "VPA-View 已於背景啟動 (PID: ${pid}) -> http://${HOST}:${PORT}"
+      echo "VPA-Observer 已於背景啟動 (PID: ${pid}) -> http://${HOST}:${PORT}"
     else
       echo "啟動失敗，請查看日誌: ${LOG_FILE}"
       tail -n 30 "${LOG_FILE}" || true
       exit 1
     fi
   else
-    echo "VPA-View 啟動中 -> http://${HOST}:${PORT}"
+    echo "VPA-Observer 啟動中 -> http://${HOST}:${PORT}"
     exec "${VENV_DIR}/bin/uvicorn" backend.main:app --host "${HOST}" --port "${PORT}"
   fi
 }
@@ -107,13 +107,13 @@ cmd_start() {
 cmd_stop() {
   if ! is_running; then
     rm -f "${PID_FILE}"
-    echo "VPA-View 目前未運行。"
+    echo "VPA-Observer 目前未運行。"
     return 0
   fi
 
   local pid
   pid="$(cat "${PID_FILE}")"
-  echo "停止 VPA-View (PID: ${pid})..."
+  echo "停止 VPA-Observer (PID: ${pid})..."
   kill "${pid}" 2>/dev/null || true
   for _ in {1..20}; do
     if ! kill -0 "${pid}" 2>/dev/null; then
@@ -152,17 +152,17 @@ install_app_shortcut() {
       apps_dir="${HOME}/Applications"
       mkdir -p "${apps_dir}"
     fi
-    local app_dir="${apps_dir}/VPA-View.app"
+    local app_dir="${apps_dir}/VPA-Observer.app"
     local macos_dir="${app_dir}/Contents/MacOS"
     local res_dir="${app_dir}/Contents/Resources"
     mkdir -p "${macos_dir}" "${res_dir}"
 
-    cat > "${macos_dir}/VPA-View" <<EOF
+    cat > "${macos_dir}/VPA-Observer" <<EOF
 #!/usr/bin/env bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\${PATH:-}"
-exec "${ROOT_DIR}/devops.sh" redeploy --no-shortcut >> "${RUN_DIR}/vpa-view.log" 2>&1
+exec "${ROOT_DIR}/devops.sh" redeploy --no-shortcut >> "${RUN_DIR}/vpa-observer.log" 2>&1
 EOF
-    chmod +x "${macos_dir}/VPA-View"
+    chmod +x "${macos_dir}/VPA-Observer"
 
     cat > "${app_dir}/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -170,11 +170,11 @@ EOF
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>VPA-View</string>
+  <string>VPA-Observer</string>
   <key>CFBundleDisplayName</key>
-  <string>VPA-View</string>
+  <string>VPA-Observer</string>
   <key>CFBundleIdentifier</key>
-  <string>local.vpa-view.launcher</string>
+  <string>local.vpa-observer.launcher</string>
   <key>CFBundleVersion</key>
   <string>1.0</string>
   <key>CFBundleShortVersionString</key>
@@ -182,7 +182,7 @@ EOF
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleExecutable</key>
-  <string>VPA-View</string>
+  <string>VPA-Observer</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSUIElement</key>
@@ -219,12 +219,12 @@ PLIST
     echo "已更新系統應用程式捷徑 -> ${app_dir}"
   elif [[ "${os_name}" == "Linux" ]]; then
     local desktop_dir="${HOME}/.local/share/applications"
-    local desktop_file="${desktop_dir}/vpa-view.desktop"
+    local desktop_file="${desktop_dir}/vpa-observer.desktop"
     mkdir -p "${desktop_dir}"
     cat > "${desktop_file}" <<EOF
 [Desktop Entry]
 Type=Application
-Name=VPA-View
+Name=VPA-Observer
 Comment=台美股量價看盤
 Exec="${ROOT_DIR}/devops.sh" redeploy --no-shortcut
 Icon=${ROOT_DIR}/frontend/icon.png

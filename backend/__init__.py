@@ -1,1 +1,1 @@
-"""VPA-View backend package."""
+"""VPA-Observer backend package."""
