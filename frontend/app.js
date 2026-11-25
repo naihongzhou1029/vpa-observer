@@ -59,6 +59,7 @@
   const lgTime = document.getElementById("lg-time");
   const lgOhlc = document.getElementById("lg-ohlc");
   const lgVpa = document.getElementById("lg-vpa");
+  const vpaBaseVolEl = document.getElementById("vpa-base-vol");
 
   let toastTimer = null;
   function showToast(msg) {
@@ -157,9 +158,26 @@
   const volumeSeries = chart.addHistogramSeries({
     priceFormat: { type: "volume" },
     priceScaleId: "",
+    priceLineVisible: false,
+    lastValueVisible: false,
   });
 
   volumeSeries.priceScale().applyOptions({
+    scaleMargins: { top: 0.78, bottom: 0.0 },
+  });
+
+  const volMaSeries = chart.addLineSeries({
+    priceFormat: { type: "volume" },
+    priceScaleId: "",
+    color: "rgba(255, 255, 255, 0.9)",
+    lineWidth: 2,
+    lineStyle: LightweightCharts.LineStyle.Dashed,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    crosshairMarkerVisible: false,
+  });
+
+  volMaSeries.priceScale().applyOptions({
     scaleMargins: { top: 0.78, bottom: 0.0 },
   });
 
@@ -197,6 +215,17 @@
     return val >= 100 ? val.toFixed(2) : val.toFixed(3).replace(/0$/, "");
   }
 
+  function getBarBaseVolume(bar) {
+    if (!bar) return null;
+    if (bar.vol_ma20 != null && Number.isFinite(bar.vol_ma20)) {
+      return bar.vol_ma20;
+    }
+    if (bar.vol_ratio > 0 && Number.isFinite(bar.volume)) {
+      return bar.volume / bar.vol_ratio;
+    }
+    return null;
+  }
+
   function updateLegend(bar) {
     lgSymbol.textContent = state.symbol;
     lgName.textContent = state.name && state.name !== state.symbol ? state.name : "";
@@ -215,6 +244,7 @@
     const isUp = bar.close >= prevClose;
     const palette = getPalette();
     const chgColor = isUp ? palette.up : palette.down;
+    const baseVol = getBarBaseVolume(bar);
 
     lgTime.textContent = formatTimestamp(bar.time, state.interval, state.market);
     lgOhlc.innerHTML = `
@@ -223,7 +253,7 @@
       <span>低 <b>${formatPrice(bar.low)}</b></span>
       <span>收 <b style="color:${chgColor}">${formatPrice(bar.close)}</b></span>
       <span style="color:${chgColor}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>
-      <span>量 <b>${formatVolume(bar.volume)}</b></span>
+      <span>量 <b>${formatVolume(bar.volume)}</b> <small style="color:#9ca3af">(20MA ${baseVol != null ? formatVolume(baseVol) : "--"})</small></span>
       <span>量比 <b>${bar.vol_ratio.toFixed(2)}x</b></span>
       <span>幅比 <b>${bar.spread_ratio.toFixed(2)}x</b></span>
     `;
@@ -260,9 +290,16 @@
       value: b.volume,
       color: volumeColorForBar(b),
     }));
+    const volMaData = state.bars
+      .map((b) => {
+        const baseVol = getBarBaseVolume(b);
+        return baseVol != null ? { time: b.time, value: baseVol } : null;
+      })
+      .filter(Boolean);
 
     candleSeries.setData(candleData);
     volumeSeries.setData(volumeData);
+    volMaSeries.setData(volMaData);
 
     if (state.showMarkers) {
       const styledMarkers = state.markers.map((m) => {
@@ -283,8 +320,14 @@
     }
 
     if (state.bars.length > 0) {
-      updateLegend(state.bars[state.bars.length - 1]);
+      const latestBar = state.bars[state.bars.length - 1];
+      const latestBase = getBarBaseVolume(latestBar);
+      if (vpaBaseVolEl) {
+        vpaBaseVolEl.textContent = latestBase != null ? `基準 20MA: ${formatVolume(latestBase)}` : "基準 20MA: --";
+      }
+      updateLegend(latestBar);
     } else {
+      if (vpaBaseVolEl) vpaBaseVolEl.textContent = "基準 20MA: --";
       updateLegend(null);
     }
   }

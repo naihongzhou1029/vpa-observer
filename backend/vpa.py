@@ -155,6 +155,7 @@ def analyze_vpa(bars: list[dict[str, Any]]) -> dict[str, Any]:
                 "low": round(float(row["low"]), 4),
                 "close": round(float(row["close"]), 4),
                 "volume": float(row["volume"]),
+                "vol_ma20": round(float(row["vol_ma20"]), 2),
                 "vol_ratio": vol_ratio,
                 "spread_ratio": spread_ratio,
                 "volume_grade": grade,

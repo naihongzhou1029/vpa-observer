@@ -396,6 +396,21 @@ html, body {
   padding: 11px 13px;
 }
 
+.vpa-legend-box .legend-base-vol {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f9fafb;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+  padding: 4px 9px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 .vpa-legend-box .legend-title {
   font-size: 15px;
   color: var(--text-muted);
