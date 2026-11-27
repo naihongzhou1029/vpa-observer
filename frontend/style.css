@@ -531,7 +531,8 @@ html, body {
   border: 1px solid rgba(36, 48, 71, 0.75);
   border-radius: 8px;
   padding: 10px 13px;
-  max-width: min(860px, 78vw);
+  width: max-content;
+  max-width: calc(100% - 24px);
   font-variant-numeric: tabular-nums;
 }
 
@@ -569,7 +570,8 @@ html, body {
 
 .legend-ohlc {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
   gap: 11px;
   font-size: 17px;
   color: var(--text-secondary);
